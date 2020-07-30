@@ -25,7 +25,7 @@ from utils.visual import plotfig
 import matplotlib.pyplot as plt
 
 IMG_MEAN = np.array((98.933625, 108.389025, 99.84372), dtype=np.float32) #src
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 def get_arguments():
 
@@ -36,7 +36,7 @@ def get_arguments():
                         help="source dataset path.")
     parser.add_argument("--data_dir_tgt", type=str, default='../data/tx/sh/',
                         help="target val dataset path.")
-    parser.add_argument("--data_dir_pse", type=str, default='../',
+    parser.add_argument("--data_dir_pse", type=str, default='../pseudo_total/',
                         help="target val dataset path.")              
     parser.add_argument("--data_list_src", type=str, default='../data/src.txt',
                         help="source dataset list file.")
@@ -55,11 +55,11 @@ def get_arguments():
     parser.add_argument("--num_classes", type=int, default=2,
                         help="number of classes.")
     #network
-    parser.add_argument("--batch_size", type=int, default=2,
+    parser.add_argument("--batch_size", type=int, default=3,
                         help="number of images in each batch.")
     parser.add_argument("--num_workers", type=int, default=6,
                         help="number of workers for multithread dataloading.")
-    parser.add_argument("--learning_rate", type=float, default=0.001,
+    parser.add_argument("--learning_rate", type=float, default=0.005,
                         help="base learning rate.")
     parser.add_argument("--momentum", type=float, default=0.9,
                         help="momentum.")
@@ -105,6 +105,8 @@ def main():
         os.makedirs(args.snapshot_dir)
     if os.path.exists(args.log_root)==False:
         os.makedirs(args.log_root)
+    if os.path.exists(args.data_dir_pse)==False:
+        os.makedirs(args.data_dir_pse)
 
     f = open(args.log_root + exp_name + '_log.txt', 'w')
 
@@ -143,7 +145,7 @@ def main():
                     VaihingenDataSet(args.data_dir_tgt, args.data_list_tgt_val, 
                     crop_size=input_size,
                     scale=False, mirror=False, mean=IMG_MEAN, set='val'),
-                    batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
+                    batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
 
     pse_generator = data.DataLoader(
                     VaihingenDataSet(args.data_dir_tgt, args.data_list_tgt_test,
@@ -168,14 +170,14 @@ def main():
         f.write('1-weight:{}\n'.format(1-weight[epoch]))
         print('lr is {}'.format(optimizer.state_dict()['param_groups'][0]['lr']))
 
-        if epoch == 0:
+        if not epoch == 0:
             print('start generating pseudo label')
             starttime = time.time()
             Pseudo_net = DeepLab_net
             Pseudo_net.eval()
             Pseudo_net.cuda()
-            dir1 = os.path.join('../pseudo/',str(epoch))
-            dir2 = os.path.join('../pseudo_col/',str(epoch))
+            dir1 = os.path.join(args.data_dir_pse,'/pseudo_lab/',str(epoch))
+            dir2 = os.path.join(args.data_dir_pse,'/pseudo_col/',str(epoch))
             if not os.path.exists(dir1 or dir2):
                 os.makedirs(dir1)
                 os.makedirs(dir2)

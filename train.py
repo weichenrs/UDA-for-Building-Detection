@@ -25,7 +25,7 @@ import matplotlib.pyplot as plt
 
 # IMG_MEAN = np.array((97.535715, 97.54362, 91.88925), dtype=np.float32) #sh
 IMG_MEAN = np.array((98.933625, 108.389025, 99.84372), dtype=np.float32) #src
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 def get_arguments():
 
@@ -51,7 +51,7 @@ def get_arguments():
                         help="number of images in each batch.")
     parser.add_argument("--num_workers", type=int, default=1,
                         help="number of workers for multithread dataloading.")
-    parser.add_argument("--learning_rate", type=float, default=0.001,
+    parser.add_argument("--learning_rate", type=float, default=0.005,
                         help="base learning rate.")
     parser.add_argument("--momentum", type=float, default=0.9,
                         help="momentum.")
@@ -70,7 +70,15 @@ def main():
 
     """Create the model and start the training."""
     args = get_arguments() #从命令行获取参数
-    exp_name = 'Src2SH_lr'+str(args.learning_rate)+'_ep'+str(args.num_epoch)+'_'+str(args.input_size.split(',')[0])
+    lt = time.localtime(time.time())
+    yyyy = str(lt.tm_year)
+    mm = str(lt.tm_mon)
+    dd = str(lt.tm_mday)
+    hh = str(lt.tm_hour)
+    mn = str(lt.tm_min)
+    sc = str(lt.tm_sec)
+    timename = '-'+yyyy+'-'+mm+'-'+dd+'-'+hh+'-'+mn+'-'+sc
+    exp_name = 'Src2SH_srconly_lr'+str(args.learning_rate)+'_ep'+str(args.num_epoch)+'_'+str(args.input_size.split(',')[0]+timename)
     # print(exp_name)
     args.snapshot_dir = os.path.join(args.snapshot_root, exp_name)
     if os.path.exists(args.snapshot_dir)==False:
@@ -102,15 +110,16 @@ def main():
                     PotsdamDataSet(args.data_dir_tgt_val, args.data_list_tgt_val,
                     crop_size=input_size,
                     scale=False, mirror=False, mean=IMG_MEAN),
-                    batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
+                    batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
 
     num_batches = len(src_loader)
     optimizer = optim.SGD(train_params, lr=args.learning_rate, momentum=0.9, weight_decay=5e-4, nesterov=False)
     criterion = SegmentationLosses().build_loss(mode='ce')
+    scheduler = optim.lr_scheduler.StepLR(optimizer,step_size=1,gamma = 0.9)
     num_steps = args.num_epoch*num_batches
     loss_hist = np.zeros((num_steps,2))
     index_i = -1
-    OA_hist = 0.2 #miou大于该值,则对模型进行存储
+    OA_hist = 0.01 #miou大于该值,则对模型进行存储
 
     for epoch in range(args.num_epoch):
         #if epoch==6:
@@ -151,7 +160,7 @@ def main():
                 f.write('epoch %d/%d:  %d/%d, time: %.2f, miu = %.1f, cls_loss = %.3f \n'%(epoch+1,args.num_epoch, batch_index+1,num_batches, batch_time*printfrq, np.mean(loss_hist[index_i+1-printfrq:index_i+1,1])*100, np.mean(loss_hist[index_i+1-printfrq:index_i+1,0])))
                 f.flush()
 
-            testfrq = (num_batches/2)
+            testfrq = 10
             if (batch_index+1) % testfrq == 0:
                 #test_mIoU(f,model, data_loader, epoch,input_size, print_per_batches=10)
                 #f是打开log.txt
@@ -161,11 +170,11 @@ def main():
                 if OA_new > OA_hist:
                     f.write('Save Model\n')
                     print('Save Model')
-                    model_name = exp_name+'_epoch'+repr(epoch+1)+'_'+repr((batch_index+1)/testfrq)+'miu_'+repr(int(OA_new*1000))+'.pth'
+                    model_name = exp_name+'_epoch'+repr(epoch+1)+'_'+repr((batch_index+1)/testfrq)+'_miu_'+repr(int(OA_new*1000))+'.pth'
                     torch.save(DeepLab_net.state_dict(), os.path.join(
                         args.snapshot_dir, model_name))
                     OA_hist = OA_new
-
+        scheduler.step()
     f.close()
     torch.save(DeepLab_net.state_dict(), os.path.join(
         args.snapshot_dir, exp_name + '_final.pth'))

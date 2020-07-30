@@ -28,7 +28,7 @@ class VaihingenPseudo(data.Dataset):
         self.files = []
         for name in self.img_ids:
             img_file = osp.join(self.root, "images/%s" % name)
-            label_file = osp.join(self.pseroot, "pseudo/%s/%s" % (str(epoch),name) )
+            label_file = osp.join(self.pseroot, "pseudo_lab/%s/%s" % (str(epoch),name) )
             self.files.append({
                 "img": img_file,
                 "label": label_file,
