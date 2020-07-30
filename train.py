@@ -160,7 +160,7 @@ def main():
                 f.write('epoch %d/%d:  %d/%d, time: %.2f, miu = %.1f, cls_loss = %.3f \n'%(epoch+1,args.num_epoch, batch_index+1,num_batches, batch_time*printfrq, np.mean(loss_hist[index_i+1-printfrq:index_i+1,1])*100, np.mean(loss_hist[index_i+1-printfrq:index_i+1,0])))
                 f.flush()
 
-            testfrq = 10
+            testfrq = (num_batches/2)
             if (batch_index+1) % testfrq == 0:
                 #test_mIoU(f,model, data_loader, epoch,input_size, print_per_batches=10)
                 #f是打开log.txt
