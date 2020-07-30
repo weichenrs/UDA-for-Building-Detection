@@ -229,7 +229,7 @@ def main():
             # Src Segmentation Loss
             optimizer.zero_grad() 
             src_loss_value = criterion(src_output, src_label)
-            src_loss_value = (1-weight[epoch]) * src_loss_value
+            src_loss_value = (1-weight[epoch]*(2/3)-1/3) * src_loss_value
             _, predict_labels = torch.max(src_output, 1) #_保存最大值, predict_labels保存最大值对应的索引
             lbl_pred = predict_labels.detach().cpu().numpy()
             lbl_true = src_label.detach().cpu().numpy()
@@ -247,7 +247,6 @@ def main():
             tgt_output = DeepLab_net(images) #src out shape:2,6,512,512
             # Tgt Segmentation Loss
             tgt_loss_value = criterion(tgt_output, tgt_label)
-            tgt_loss_value = weight[epoch] * tgt_loss_value
             _, predict_labels = torch.max(tgt_output, 1) #_保存最大值, predict_labels保存最大值对应的索引
             lbl_pred = predict_labels.detach().cpu().numpy()
             lbl_true = tgt_label.detach().cpu().numpy()
