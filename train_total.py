@@ -67,7 +67,7 @@ def get_arguments():
                         help="number of training epochs.")
     parser.add_argument("--weight_decay", type=float, default=0.00005,
                         help="regularisation parameter for L2-loss.")
-    parser.add_argument("--threshold", type=float, default=0.6,
+    parser.add_argument("--threshold", type=float, default=0.8,
                         help="The threshold of the pseudo label.")
     #result
     parser.add_argument("--snapshot_root", type=str, default='../snap/',
@@ -99,7 +99,6 @@ def main():
     sc = str(lt.tm_sec)
     timename = '-'+yyyy+'-'+mm+'-'+dd+'-'+hh+'-'+mn+'-'+sc
     exp_name = 'Src2SH_uni_lr'+str(args.learning_rate)+'_ep'+str(args.num_epoch)+'_'+str(args.input_size.split(',')[0]+timename)
-    # print(exp_name)
     args.snapshot_dir = os.path.join(args.snapshot_root, exp_name)
     if os.path.exists(args.snapshot_dir)==False:
         os.makedirs(args.snapshot_dir)
@@ -120,39 +119,37 @@ def main():
                     {'params': DeepLab_net.get_10x_lr_params(), 'lr': args.learning_rate * 10}]
     DeepLab_net = DeepLab_net.cuda()
 
+    srcnum = len([i_id.strip() for i_id in open(args.data_list_src)])
     #加载source的数据集
     src_loader = data.DataLoader(
                     PotsdamDataSet(args.data_dir_src, args.data_list_src,
                     crop_size=input_size,
                     scale=False, mirror=False, mean=IMG_MEAN),
                     batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
-
+    
     #加载target中的所有数据
     tgt_loader = data.DataLoader(
-                    VaihingenDataSet(args.data_dir_tgt, args.data_list_tgt_train, max_iters=len(src_loader), 
+                    VaihingenDataSet(args.data_dir_tgt, args.data_list_tgt_train, max_iters=srcnum, 
                     crop_size=input_size,
                     scale=False, mirror=False, mean=IMG_MEAN, set='train'),
                     batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
 
     test_loader = data.DataLoader(
-                    VaihingenDataSet(args.data_dir_tgt, args.data_list_tgt_test, max_iters=len(src_loader),
+                    VaihingenDataSet(args.data_dir_tgt, args.data_list_tgt_test, max_iters=srcnum,
                     crop_size=input_size,
                     scale=False, mirror=False, mean=IMG_MEAN, set='test'),
                     batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
-    
     #加载target中的验证集val
     val_loader = data.DataLoader(
                     VaihingenDataSet(args.data_dir_tgt, args.data_list_tgt_val, 
                     crop_size=input_size,
                     scale=False, mirror=False, mean=IMG_MEAN, set='val'),
                     batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True)
-
     pse_generator = data.DataLoader(
                     VaihingenDataSet(args.data_dir_tgt, args.data_list_tgt_test,
                     crop_size=input_size,
                     scale=False, mirror=False, mean=IMG_MEAN, set='test'),
                     batch_size=1, shuffle=False, num_workers=args.num_workers, pin_memory=True)
-
     num_batches = len(src_loader)
     optimizer = optim.SGD(train_params, lr= args.learning_rate,momentum = 0.9, weight_decay = 5e-4, nesterov = False)
     scheduler = optim.lr_scheduler.StepLR(optimizer,step_size=1,gamma = 0.9)
@@ -168,7 +165,8 @@ def main():
         #    return
         print('1-weight:{}\n'.format(1-weight[epoch]))
         f.write('1-weight:{}\n'.format(1-weight[epoch]))
-        print('lr is {}'.format(optimizer.state_dict()['param_groups'][0]['lr']))
+        print('lr:{}'.format(optimizer.state_dict()['param_groups'][0]['lr']))
+        f.write('lr:{}\n'.format(optimizer.state_dict()['param_groups'][0]['lr']))
 
         if not epoch == 0:
             print('start generating pseudo label')
@@ -176,22 +174,23 @@ def main():
             Pseudo_net = DeepLab_net
             Pseudo_net.eval()
             Pseudo_net.cuda()
-            dir1 = os.path.join(args.data_dir_pse,'/pseudo_lab/',str(epoch))
-            dir2 = os.path.join(args.data_dir_pse,'/pseudo_col/',str(epoch))
+            dir1 = os.path.join(args.data_dir_pse,'pseudo_lab',str(epoch))
+            dir2 = os.path.join(args.data_dir_pse,'pseudo_col',str(epoch))
             if not os.path.exists(dir1 or dir2):
                 os.makedirs(dir1)
                 os.makedirs(dir2)
             for index, batch in enumerate(pse_generator):
                 image, name = batch
-                # print(index, name)
                 output = Pseudo_net(image.cuda()).cpu().data[0].numpy()
                 output = output.transpose(1,2,0)
                 # top1 = np.max(output,axis = 2)
                 # top2 = np.min(output,axis = 2)
                 # inter = top1 - top2
-                inter = output[:,:,1] - output[:,:,0]
-                pseudolab = np.asarray(np.argmax(output, axis=2), dtype=np.uint8) + 1 
-                pseudolab[inter< args.threshold] = 0 #伪标签阈值
+                top = np.max(output,axis = 2)
+                # inter = output[:,:,1] - output[:,:,0]
+                pseudolab = np.asarray(np.argmax(output, axis=2), dtype=np.uint8) + 1
+                # pseudolab[inter< args.threshold] = 0 #伪标签阈值
+                pseudolab[top < args.threshold] = 0 #伪标签阈值
                 pseudolab_col = _colorize_mask(pseudolab)
                 pseudolab = Image.fromarray(pseudolab)
                 name = name[0].split('/')[-1]
@@ -206,13 +205,13 @@ def main():
         #加载target中的所以伪标签数据        
         if epoch == 0:
             pse_loader = data.DataLoader(
-                            VaihingenDataSet(args.data_dir_tgt, args.data_list_tgt_test, max_iters=len(src_loader),
+                            VaihingenDataSet(args.data_dir_tgt, args.data_list_tgt_test, max_iters=srcnum,
                             crop_size=input_size,
                             scale=False, mirror=False, mean=IMG_MEAN, set='val'),
                             batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
         else:
             pse_loader = data.DataLoader(
-                            VaihingenPseudo(args.data_dir_tgt, args.data_dir_pse, args.data_list_tgt_test, max_iters=len(src_loader),
+                            VaihingenPseudo(args.data_dir_tgt, args.data_dir_pse, args.data_list_tgt_test, max_iters=srcnum,
                             crop_size=input_size,
                             scale=False, mirror=False, mean=IMG_MEAN, epoch=epoch),
                             batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True)
@@ -221,7 +220,6 @@ def main():
             index_i += 1
             tem_time = time.time()
             DeepLab_net.train()
-
             ###############################################################
             ###################### train with source ######################
             images, src_label, name = src_data
@@ -231,6 +229,7 @@ def main():
             # Src Segmentation Loss
             optimizer.zero_grad() 
             src_loss_value = criterion(src_output, src_label)
+            src_loss_value = (1-weight[epoch]) * src_loss_value
             _, predict_labels = torch.max(src_output, 1) #_保存最大值, predict_labels保存最大值对应的索引
             lbl_pred = predict_labels.detach().cpu().numpy()
             lbl_true = src_label.detach().cpu().numpy()
@@ -248,6 +247,7 @@ def main():
             tgt_output = DeepLab_net(images) #src out shape:2,6,512,512
             # Tgt Segmentation Loss
             tgt_loss_value = criterion(tgt_output, tgt_label)
+            tgt_loss_value = weight[epoch] * tgt_loss_value
             _, predict_labels = torch.max(tgt_output, 1) #_保存最大值, predict_labels保存最大值对应的索引
             lbl_pred = predict_labels.detach().cpu().numpy()
             lbl_true = tgt_label.detach().cpu().numpy()
@@ -290,7 +290,6 @@ def main():
 
             ###############################################################
             ############### train with target pseudo lables ###############
-
             images, pse_label, name = pse_data
             images = images.cuda()
             pse_label = pse_label.cuda()
@@ -317,27 +316,25 @@ def main():
             batch_time = time.time()-tem_time
             printfrq = 10
             if (batch_index+1) % printfrq == 0:
-                print('epoch %d/%d:  %d/%d time: %.2f srcmiu = %.1f tgtmiu = %.1f src_loss = %.3f tgt_loss = %.3f con_loss = %.3f pse_loss = %.3f\n'%(epoch+1,args.num_epoch, batch_index+1,num_batches, batch_time*printfrq, np.mean(loss_hist[index_i+1-printfrq:index_i+1,5])*100, np.mean(loss_hist[index_i+1-printfrq:index_i+1,6])*100, np.mean(loss_hist[index_i+1-printfrq:index_i+1,1]), np.mean(loss_hist[index_i+1-printfrq:index_i+1,2]), np.mean(loss_hist[index_i+1-printfrq:index_i+1,3]), np.mean(loss_hist[index_i+1-printfrq:index_i+1,4]) ))
-                f.write('epoch %d/%d:  %d/%d time: %.2f srcmiu = %.1f tgtmiu = %.1f src_loss = %.3f tgt_loss = %.3f con_loss = %.3f pse_loss = %.3f\n'%(epoch+1,args.num_epoch, batch_index+1,num_batches, batch_time*printfrq, np.mean(loss_hist[index_i+1-printfrq:index_i+1,5])*100, np.mean(loss_hist[index_i+1-printfrq:index_i+1,6])*100, np.mean(loss_hist[index_i+1-printfrq:index_i+1,1]), np.mean(loss_hist[index_i+1-printfrq:index_i+1,2]), np.mean(loss_hist[index_i+1-printfrq:index_i+1,3]), np.mean(loss_hist[index_i+1-printfrq:index_i+1,4]) ))
+                print('epoch %d/%d:  %d/%d time: %.2f srcmiu = %.1f tgtmiu = %.1f src_loss = %.3f tgt_loss = %.3f con_loss = %.3f pse_loss = %.3f\n'%(epoch+1,args.num_epoch, batch_index+1, num_batches, batch_time*printfrq, np.mean(loss_hist[index_i+1-printfrq:index_i+1,5])*100, np.mean(loss_hist[index_i+1-printfrq:index_i+1,6])*100, np.mean(loss_hist[index_i+1-printfrq:index_i+1,1]), np.mean(loss_hist[index_i+1-printfrq:index_i+1,2]), np.mean(loss_hist[index_i+1-printfrq:index_i+1,3]), np.mean(loss_hist[index_i+1-printfrq:index_i+1,4]) ))
+                f.write('epoch %d/%d:  %d/%d time: %.2f srcmiu = %.1f tgtmiu = %.1f src_loss = %.3f tgt_loss = %.3f con_loss = %.3f pse_loss = %.3f\n'%(epoch+1,args.num_epoch, batch_index+1, num_batches, batch_time*printfrq, np.mean(loss_hist[index_i+1-printfrq:index_i+1,5])*100, np.mean(loss_hist[index_i+1-printfrq:index_i+1,6])*100, np.mean(loss_hist[index_i+1-printfrq:index_i+1,1]), np.mean(loss_hist[index_i+1-printfrq:index_i+1,2]), np.mean(loss_hist[index_i+1-printfrq:index_i+1,3]), np.mean(loss_hist[index_i+1-printfrq:index_i+1,4]) ))
                 f.flush()
 
-            if (batch_index+1) % (num_batches/2) == 0:
+            testfrq = (num_batches/2)
+            if (batch_index+1) % testfrq == 0:
                 #test_mIoU(f,model, data_loader, epoch,input_size, print_per_batches=10)
                 #f是打开log.txt
                 OA_new = test_mIoU(f, DeepLab_net, val_loader, epoch+1, input_size, print_per_batches=10)
-
                 # Saving the models
                 if OA_new > OA_hist:
                     f.write('Save Model\n')
                     print('Save Model')
-                    model_name = exp_name+'_epoch_'+'_'+repr(epoch+1)+'batch'+repr(batch_index+1)+'miu_'+repr(int(OA_new*1000))+'.pth'
-                    torch.save(DeepLab_net.state_dict(), os.path.join(
-                        args.snapshot_dir, model_name))
+                    model_name = exp_name+'_epoch'+repr(epoch+1)+'_'+repr((batch_index+1)/testfrq)+'miu_'+repr(int(OA_new*1000))+'.pth'
+                    torch.save(DeepLab_net.state_dict(), os.path.join(args.snapshot_dir, model_name))
                     OA_hist = OA_new
         scheduler.step()
     f.close()
-    torch.save(DeepLab_net.state_dict(), os.path.join(
-        args.snapshot_dir, exp_name + '_final.pth'))
+    torch.save(DeepLab_net.state_dict(), os.path.join(args.snapshot_dir, exp_name + '_final.pth'))
     np.savez(args.snapshot_dir + exp_name + '_loss&miu_stat.npz',loss_hist=loss_hist)
     plotfig(loss_hist,args.snapshot_dir)
 

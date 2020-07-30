@@ -22,7 +22,7 @@ IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 def _colorize_mask(mask):
     # mask: numpy array of the mask
     #各个类的标签的RGB值 对应json文件中的palette
-    palette = [0,0,0, 255,255,255]
+    palette = [255,0,0, 0,0,0, 255,255,255]
     '''zero_pad = 256 * 3 - len(palette)
     for i in range(zero_pad):
         palette.append(0)'''

@@ -20,7 +20,7 @@ class VaihingenPseudo(data.Dataset):
         self.mean = mean
         self.is_mirror = mirror
 
-        self.id_to_trainid = {255: 1}
+        self.id_to_trainid = {1:0, 2:1}
         self.img_ids = [i_id.strip() for i_id in open(list_path)]
         if not max_iters==None:
             n_repeat = int(max_iters / len(self.img_ids))
@@ -51,7 +51,7 @@ class VaihingenPseudo(data.Dataset):
         image = np.asarray(image, np.float32)
         label = np.asarray(label, np.float32)
 
-        label_copy = 255 * np.zeros(label.shape[0:2], dtype=np.float32)
+        label_copy = 255 * np.ones(label.shape[0:2], dtype=np.float32)
         
         for k, v in self.id_to_trainid.items():
             label_copy[label == k] = v
