@@ -71,7 +71,7 @@ def get_arguments():
     #result
     parser.add_argument("--snapshot_root", type=str, default='../snap/',
                         help="where to save snapshots of the model.")
-    parser.add_argument("--log_root", type=str, default='../log/',
+    parser.add_argument("--log_root", type=str, default='../snap/',
                         help="where to save snapshots of the model.")
     parser.add_argument("--noise", type=float, default=0.1,
                         help="noise.")
