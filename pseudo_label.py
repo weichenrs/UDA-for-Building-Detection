@@ -17,7 +17,8 @@ from utils.tools import *
 from modeling.deeplab import *
 import matplotlib.pyplot as plt
 import torch.nn as nn
-IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
+
+IMG_MEAN = np.array((98.933625, 108.389025, 99.84372), dtype=np.float32) #src
 
 def _colorize_mask(mask):
     # mask: numpy array of the mask
@@ -39,17 +40,17 @@ def get_arguments():
       A list of parsed arguments.
     """
     parser = argparse.ArgumentParser(description="DeepLab")
-    parser.add_argument("--data_dir", type=str, default='./data/SegmentationData/vaihingen/',
+    parser.add_argument("--data_dir_tgt", type=str, default='../data/tx/sh/',
                         help="target dataset path.")
-    parser.add_argument("--data_list", type=str, default='./dataset/Vaihingen_all.txt',
+    parser.add_argument("--data_list_tgt_test", type=str, default='../data/shtest.txt',
                         help="target dataset list file.")
     parser.add_argument("--ignore-label", type=int, default=255,
                         help="the index of the label to ignore in the training.")
-    parser.add_argument("--num-classes", type=int, default=6,
+    parser.add_argument("--num-classes", type=int, default=2,
                         help="number of classes.")
-    parser.add_argument("--restore-from", type=str, default='./Snap/Potsdam2Vaihingen_epoch7batch1500tgt_miu_462.pth',
+    parser.add_argument("--restore-from", type=str, default='../snap/Src2SH_lr0.002_ep10_1024/Src2SH_lr0.002_ep10_1024_epoch__7batch2081miu_730.pth',
                         help="restored model.")
-    parser.add_argument("--snapshot_dir", type=str, default='./Snap/pseudolabel',
+    parser.add_argument("--snapshot_dir", type=str, default='../pseudo/',
                         help="Path to save result.")
     parser.add_argument("--threshold", type=float, default=0.5,
                         help="The threshold of the pseudo label.")
@@ -71,33 +72,31 @@ def main():
 
     model.eval()
     model.cuda()
-    testloader = data.DataLoader(VaihingenDataSet(args.data_dir, args.data_list, crop_size=(512, 512), mean=IMG_MEAN, scale=False, mirror=False, set='val'),
-                                    batch_size=1, shuffle=False, pin_memory=True)
-
-
-    for index, batch in enumerate(testloader):
+    pse_generator = data.DataLoader(
+                    VaihingenDataSet(args.data_dir_tgt, args.data_list_tgt_test,
+                    crop_size=(1024,1024)),
+                    scale=False, mirror=False, mean=IMG_MEAN, set='test'),
+                    batch_size=1, shuffle=False, num_workers=args.num_workers, pin_memory=True)
+                    
+    dir1 = os.path.join(args.snapshot_dir,'pseudo_lab')
+    dir2 = os.path.join(args.snapshot_dir,'pseudo_col')
+    if not os.path.exists(dir1 or dir2):
+        os.makedirs(dir1)
+        os.makedirs(dir2)
+    for index, batch in enumerate(pse_generator):
         if index % 100 == 0:
             print('%d processd' % index)
-        image, _,_, name = batch
+        image, _, name = batch
         output = model(image.cuda()).cpu().data[0].numpy()
         output = output.transpose(1,2,0)
-        top1 = np.max(output,axis = 2)
-        top2 = np.sort(output,axis = 2)[:,:,4]
-        inter = top1 - top2
+        top = np.max(output,axis = 2)
         pseudolab = np.asarray(np.argmax(output, axis=2), dtype=np.uint8) + 1 
-        
-        pseudolab[inter< args.threshold] = 0 #伪标签阈值
+        pseudolab[top < args.threshold] = 0 #伪标签阈值
         pseudolab_col = _colorize_mask(pseudolab)
         output = Image.fromarray(pseudolab)
-
         name = name[0].split('/')[-1]
-        dir1 = args.snapshot_dir + '/pseudolab'
-        dir2 = args.snapshot_dir + '/pseudolab_col/'
-        if not os.path.exists(dir1 or dir2):
-            os.makedirs(dir1)
-            os.makedirs(dir2)
         output.save('%s/%s' % (dir1, name))
-        pseudolab_col.save('%s/%s_color.png' % (dir2, name.split('.')[0]))
+        pseudolab_col.save('%s/%s_color.png' % (dir2, name.split('.jpg')[0]))
 
     #f.close()
 

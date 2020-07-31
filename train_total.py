@@ -22,7 +22,6 @@ import random
 import math
 from torchvision import transforms
 from utils.visual import plotfig
-import matplotlib.pyplot as plt
 
 IMG_MEAN = np.array((98.933625, 108.389025, 99.84372), dtype=np.float32) #src
 os.environ["CUDA_VISIBLE_DEVICES"]="1"

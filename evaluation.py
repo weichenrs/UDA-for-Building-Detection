@@ -21,8 +21,7 @@ from modeling.deeplab import *
 import matplotlib.pyplot as plt
 import torch.nn as nn
 
-IMG_MEAN = np.array((97.535715, 97.54362, 91.88925), dtype=np.float32)
-
+IMG_MEAN = np.array((98.933625, 108.389025, 99.84372), dtype=np.float32) #src
 
 def get_arguments():
     """Parse all the arguments provided from the CLI.
@@ -31,9 +30,9 @@ def get_arguments():
       A list of parsed arguments.
     """
     parser = argparse.ArgumentParser(description="DeepLab")
-    parser.add_argument("--data_dir", type=str, default='../data/tx/other/',
+    parser.add_argument("--data_dir", type=str, default='../data/tx/sh/',
                         help="target dataset path.")
-    parser.add_argument("--data_list", type=str, default='../data/other.txt',
+    parser.add_argument("--data_list", type=str, default='../data/shtest.txt',
                         help="target dataset list file.")
     parser.add_argument("--ignore-label", type=int, default=255,
                         help="the index of the label to ignore in the training.")
@@ -67,7 +66,7 @@ def main():
     input_size_target = (1024,1024)
     interp = nn.Upsample(size=(1024,1024), mode='bilinear')
 
-    # test_mIoU(f,model, testloader, 0,input_size_target,print_per_batches=10)
+    test_mIoU(f,model, testloader, 0,input_size_target,print_per_batches=10)
 
     for index, batch in enumerate(testloader):
         if index % 100 == 0:
@@ -82,7 +81,7 @@ def main():
         output = Image.fromarray(output)
 
         name = name[0].split('/')[-1]
-        dir1 = args.snapshot_dir + '/predict'
+        dir1 = args.snapshot_dir + '/predict_lab/'
         dir2 = args.snapshot_dir + '/predict_col/'
         if not os.path.exists(dir1 or dir2):
             os.makedirs(dir1)
