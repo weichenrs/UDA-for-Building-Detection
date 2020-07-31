@@ -21,7 +21,8 @@ from modeling.deeplab import *
 import matplotlib.pyplot as plt
 import torch.nn as nn
 
-IMG_MEAN = np.array((98.933625, 108.389025, 99.84372), dtype=np.float32) #src
+IMG_MEAN = np.array((97.535715, 97.54362, 91.88925), dtype=np.float32)
+
 
 def get_arguments():
     """Parse all the arguments provided from the CLI.
@@ -38,9 +39,9 @@ def get_arguments():
                         help="the index of the label to ignore in the training.")
     parser.add_argument("--num-classes", type=int, default=2,
                         help="number of classes.")
-    parser.add_argument("--restore-from", type=str, default='./Snap/lr1e-3_wh1024/SourceSH_final.pth',
+    parser.add_argument("--restore-from", type=str, default='../snap/Src2SH_lr0.002_ep10_1024/Src2SH_lr0.002_ep10_1024_epoch__9batch4162miu_734.pth',
                         help="restored model.")
-    parser.add_argument("--snapshot_dir", type=str, default='../map/',
+    parser.add_argument("--snapshot_dir", type=str, default='../map/Src2SH_lr0.002_ep10_1024/',
                         help="Path to save result.")
     return parser.parse_args()
 
@@ -66,7 +67,7 @@ def main():
     input_size_target = (1024,1024)
     interp = nn.Upsample(size=(1024,1024), mode='bilinear')
 
-    test_mIoU(f,model, testloader, 0,input_size_target,print_per_batches=10)
+    # test_mIoU(f,model, testloader, 0,input_size_target,print_per_batches=10)
 
     for index, batch in enumerate(testloader):
         if index % 100 == 0:
@@ -81,7 +82,7 @@ def main():
         output = Image.fromarray(output)
 
         name = name[0].split('/')[-1]
-        dir1 = args.snapshot_dir + '/predict_lab/'
+        dir1 = args.snapshot_dir + '/predict_lab'
         dir2 = args.snapshot_dir + '/predict_col/'
         if not os.path.exists(dir1 or dir2):
             os.makedirs(dir1)
