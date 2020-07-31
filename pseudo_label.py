@@ -11,7 +11,7 @@ import torch.nn.functional as F
 from torch.utils import data, model_zoo
 from dataset.vaihingen_dataset import VaihingenDataSet
 from collections import OrderedDict
-import os
+import os, time
 from PIL import Image
 from utils.tools import *
 from modeling.deeplab import *
@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import torch.nn as nn
 
 IMG_MEAN = np.array((98.933625, 108.389025, 99.84372), dtype=np.float32) #src
-
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 def _colorize_mask(mask):
     # mask: numpy array of the mask
     #各个类的标签的RGB值 对应json文件中的palette
@@ -48,9 +48,9 @@ def get_arguments():
                         help="the index of the label to ignore in the training.")
     parser.add_argument("--num-classes", type=int, default=2,
                         help="number of classes.")
-    parser.add_argument("--restore-from", type=str, default='../snap/Src2SH_lr0.002_ep10_1024/Src2SH_lr0.002_ep10_1024_epoch__7batch2081miu_730.pth',
+    parser.add_argument("--restore-from", type=str, default='../snap/Src2SH_lr0.001_ep10_1024/Src2SH_lr0.001_ep10_1024_epoch__10batch2081miu_702.pth',
                         help="restored model.")
-    parser.add_argument("--snapshot_dir", type=str, default='../pseudo/',
+    parser.add_argument("--snapshot_dir", type=str, default='../pseudo2/',
                         help="Path to save result.")
     parser.add_argument("--threshold", type=float, default=0.5,
                         help="The threshold of the pseudo label.")
@@ -72,21 +72,23 @@ def main():
 
     model.eval()
     model.cuda()
+
     pse_generator = data.DataLoader(
                     VaihingenDataSet(args.data_dir_tgt, args.data_list_tgt_test,
-                    crop_size=(1024,1024)),
+                    crop_size=(1024,1024),
                     scale=False, mirror=False, mean=IMG_MEAN, set='test'),
-                    batch_size=1, shuffle=False, num_workers=args.num_workers, pin_memory=True)
-                    
+                    batch_size=1, shuffle=False, num_workers=6, pin_memory=True)
+
     dir1 = os.path.join(args.snapshot_dir,'pseudo_lab')
     dir2 = os.path.join(args.snapshot_dir,'pseudo_col')
     if not os.path.exists(dir1 or dir2):
         os.makedirs(dir1)
         os.makedirs(dir2)
+    print('start generating pseudo label')
+    starttime = time.time()
     for index, batch in enumerate(pse_generator):
-        if index % 100 == 0:
-            print('%d processd' % index)
-        image, _, name = batch
+
+        image, name = batch
         output = model(image.cuda()).cpu().data[0].numpy()
         output = output.transpose(1,2,0)
         top = np.max(output,axis = 2)
@@ -97,7 +99,11 @@ def main():
         name = name[0].split('/')[-1]
         output.save('%s/%s' % (dir1, name))
         pseudolab_col.save('%s/%s_color.png' % (dir2, name.split('.jpg')[0]))
-
+        if (index+1) % 100 == 0:
+            print('%d processd' % (index+1))
+    print('finish generating pseudo label')
+    pseudotime = time.time() - starttime
+    print('pseudo cost time: %.2f' % pseudotime)
     #f.close()
 
 if __name__ == '__main__':
