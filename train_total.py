@@ -55,7 +55,7 @@ def get_arguments():
     parser.add_argument("--num_classes", type=int, default=2,
                         help="number of classes.")
     #network
-    parser.add_argument("--batch_size", type=int, default=3,
+    parser.add_argument("--batch_size", type=int, default=2,
                         help="number of images in each batch.")
     parser.add_argument("--num_workers", type=int, default=6,
                         help="number of workers for multithread dataloading.")
